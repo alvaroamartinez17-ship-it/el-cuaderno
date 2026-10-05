@@ -1,0 +1,16 @@
+{
+  "name": "El Cuaderno",
+  "short_name": "Cuaderno",
+  "description": "Photograph handwritten notes, keep them small on your phone, read them offline and export them to OneNote.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f4f8",
+  "theme_color": "#2445c4",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

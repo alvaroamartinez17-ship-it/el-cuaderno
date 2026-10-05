@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>El Cuaderno</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cuaderno">
+<meta name="theme-color" content="#f2f4f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1320" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: one phone column; notes as a 2-up contact sheet, capture bar pinned under the thumb, note detail as a full-screen sheet. */
+:root{
+  --paper:#f2f4f8; --surface:#ffffff; --ink:#151d36; --muted:#5b6580;
+  --line:#d8deeb; --accent:#2445c4; --accent-ink:#ffffff; --danger:#b3261e;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --r:14px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--paper:#0f1320;--surface:#171d2e;--ink:#e6e9f3;--muted:#9aa3bc;--line:#2a3249;--accent:#8fa4ff;--accent-ink:#0f1320;--danger:#ff8a80;color-scheme:dark}
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 var(--body);-webkit-tap-highlight-color:transparent}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:720px;margin:0 auto;padding-inline:16px;padding-block:calc(env(safe-area-inset-top,0px) + 18px) calc(env(safe-area-inset-bottom,0px) + 120px)}
+
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font:800 30px/1 var(--display);letter-spacing:-.02em;margin:0;text-wrap:balance}
+h1 span{color:var(--accent)}
+.meter{font:12px/1.3 var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+
+.tools{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.search{flex:1 1 200px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:9px 12px;font-size:14px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:18px}
+.card{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;text-align:left;padding:0}
+.card img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:#fff;max-width:100%}
+.card .meta{padding:8px 10px 10px;display:grid;gap:2px;min-width:0}
+.card .t{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .s{font:11px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;gap:6px}
+.badge{color:var(--accent)}
+
+.empty{margin-top:28px;border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 20px;text-align:center;color:var(--muted)}
+.empty b{display:block;font:600 20px var(--display);color:var(--ink);margin-bottom:6px}
+
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom,0px) + 12px);background:linear-gradient(to top,var(--paper) 70%,transparent);display:flex;justify-content:center;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:13px 20px;font-weight:700;border:1px solid var(--line);background:var(--surface);cursor:pointer;min-height:48px}
+.bar .btn{white-space:nowrap;padding-inline:16px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);flex:0 1 220px}
+.btn.danger{color:var(--danger)}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn svg{width:20px;height:20px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 86px);background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px)}
+
+/* detail sheet */
+.sheet{position:fixed;inset:0;background:var(--paper);overflow-y:auto;z-index:5}
+.sheet .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 40px)}
+.top{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--paper);padding-block:calc(env(safe-area-inset-top,0px) + 10px) 10px;z-index:1}
+.back{border:0;background:none;padding:8px;margin-left:-8px;cursor:pointer;display:inline-flex}
+.back svg{width:24px;height:24px}
+.title-in{flex:1;min-width:0;border:0;background:none;font:600 20px var(--display);padding:6px 0;border-bottom:1px solid transparent}
+.title-in:focus{border-bottom-color:var(--line);outline:none}
+.photo{display:block;width:100%;border-radius:var(--r);border:1px solid var(--line);background:#fff}
+.facts{font:12px var(--mono);color:var(--muted);margin:8px 0 14px;font-variant-numeric:tabular-nums}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.actions .btn{padding:10px 16px;min-height:44px;font-size:15px}
+.ocr{margin-top:18px;display:grid;gap:8px}
+.ocr label{font-weight:700}
+.ocr textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px;resize:vertical;line-height:1.55}
+.prog{font:12px var(--mono);color:var(--muted)}
+.progbar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.progbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.note{font-size:13px;color:var(--muted)}
+
+/* export sheet */
+.xbtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;font-weight:700;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-size:14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.dates{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.dates label{display:grid;gap:4px;font-size:13px;color:var(--muted);min-width:0}
+.dates input{min-width:0;width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.check{display:flex;align-items:center;gap:10px;margin-top:14px}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.sum{font:12px var(--mono);color:var(--muted);margin:18px 0 6px;font-variant-numeric:tabular-nums}
+.days{display:grid;gap:12px;margin-bottom:18px}
+.day h3{font:600 15px var(--display);margin:0 0 4px}
+.day ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
+.day li span{color:var(--accent);font-size:12px;margin-left:6px}
+.sec{font-weight:700;margin-top:22px}
+
+/* header extras, update banner, settings */
+.hright{display:flex;align-items:center;gap:8px}
+.gear{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.gear svg{width:20px;height:20px}
+.upd{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface);font-size:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:10px;margin-top:12px}
+.panel h3{margin:0;font:600 17px var(--display)}
+.panel p{margin:0;font-size:14px;color:var(--muted)}
+.kv{font:13px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;display:grid;gap:2px}
+.kv b{color:var(--ink);font-weight:400}
+.panel.danger{border-color:var(--danger)}
+.panel.danger h3{color:var(--danger)}
+.btn.solid-danger{background:var(--danger);border-color:var(--danger);color:var(--surface)}
+.gone{max-width:520px;margin:0 auto;padding-inline:16px;padding-block:calc(env(safe-area-inset-top,0px) + 48px) 48px;display:grid;gap:14px}
+.gone h1{font-size:26px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="wrap" id="home">
+  <header>
+    <h1>El <span>Cuaderno</span></h1>
+    <div class="hright">
+      <div class="meter" id="meter">0 notes · 0 KB</div>
+      <button class="gear" id="open-settings" type="button" aria-label="Settings, update and delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
+  </header>
+  <div class="upd" id="upd" hidden>
+    <span>A new version of El Cuaderno is ready.</span>
+    <button class="xbtn" id="upd-now" type="button">Update now</button>
+  </div>
+  <div class="tools">
+    <input id="q" class="search" type="search" placeholder="Search titles and read text" aria-label="Search notes">
+    <button class="xbtn" id="open-export" type="button">Export</button>
+    <div class="seg" role="group" aria-label="Photo cleanup">
+      <button id="m-clean" type="button" aria-pressed="true">Clean</button>
+      <button id="m-ink" type="button" aria-pressed="false">Ink only</button>
+    </div>
+  </div>
+  <p class="hint" id="modehint">Clean: grey scan, keeps pencil and highlights. About 100–250 KB per page.</p>
+  <div class="upd" id="install" hidden>
+    <span id="install-txt"></span>
+    <span class="actions">
+      <button class="xbtn" id="install-btn" type="button" hidden>Install</button>
+      <button class="xbtn" id="install-x" type="button">Hide</button>
+    </span>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden>
+    <b>No notes yet</b>
+    Tap <strong>Snap note</strong> to photograph a page. It is straightened in brightness, shrunk and stored only on this phone.
+  </div>
+</main>
+
+<div class="bar">
+  <label class="btn primary" for="cam">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    Snap note
+  </label>
+  <label class="btn" for="pick">From photos</label>
+  <input class="sr" id="cam" type="file" accept="image/*" capture="environment">
+  <input class="sr" id="pick" type="file" accept="image/*" multiple>
+</div>
+
+<section class="sheet" id="sheet" hidden aria-label="Note">
+  <div class="wrap">
+    <div class="top">
+      <button class="back" id="back" type="button" aria-label="Back to all notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <input class="title-in" id="title" aria-label="Note title">
+    </div>
+    <img class="photo" id="photo" alt="Photo of the handwritten note">
+    <div class="facts" id="facts"></div>
+    <div class="actions">
+      <button class="btn primary" id="read" type="button">Read handwriting</button>
+      <button class="btn" id="copy1" type="button">Copy for OneNote</button>
+      <button class="btn" id="share" type="button">Share photo</button>
+      <button class="btn danger" id="del" type="button">Delete</button>
+    </div>
+    <div class="ocr">
+      <div id="progwrap" hidden>
+        <div class="progbar"><i id="progfill"></i></div>
+        <div class="prog" id="progtxt"></div>
+      </div>
+      <label for="text">Text</label>
+      <textarea id="text" placeholder="Tap “Read handwriting”, or type what the note says. Edits save automatically."></textarea>
+      <p class="note">Reading runs on this phone. The first time, it downloads the reading model (about 60 MB) once; after that it works offline. Your photos never leave the phone. The model was trained on English handwriting, so expect to fix words, especially in other languages.</p>
+    </div>
+  </div>
+</section>
+
+<section class="sheet" id="export" hidden aria-label="Export notes">
+  <div class="wrap">
+    <div class="top">
+      <button class="back" id="x-back" type="button" aria-label="Back to all notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 style="margin:0;font:600 20px var(--display)">Export notes</h2>
+    </div>
+    <div class="sec">Which notes</div>
+    <div class="chips" id="chips">
+      <button class="chip" type="button" data-r="today">Today</button>
+      <button class="chip" type="button" data-r="yesterday">Yesterday</button>
+      <button class="chip" type="button" data-r="week">This week</button>
+      <button class="chip" type="button" data-r="lastweek">Last week</button>
+      <button class="chip" type="button" data-r="all">Everything</button>
+    </div>
+    <div class="dates">
+      <label for="x-from">From<input id="x-from" type="date"></label>
+      <label for="x-to">To<input id="x-to" type="date"></label>
+    </div>
+    <label class="check" for="x-photos"><input id="x-photos" type="checkbox" checked> Include the photos</label>
+    <div class="sum" id="x-sum"></div>
+    <div class="days" id="x-days"></div>
+    <div class="actions">
+      <button class="btn primary" id="x-copy" type="button">Copy for OneNote</button>
+      <button class="btn" id="x-share" type="button">Share to an app</button>
+      <button class="btn" id="x-dl" type="button">Download as file</button>
+    </div>
+    <p class="note" style="margin-top:14px"><b>Copy</b> puts everything on the clipboard, grouped by day with headings. Open a OneNote page and paste. <b>Share</b> sends the text and photos to an app like OneNote or email; some apps keep only the photos, so use Copy if text goes missing. <b>Download</b> saves one web page file you can open on a computer and copy from.</p>
+  </div>
+</section>
+
+<section class="sheet" id="settings" hidden aria-label="Settings">
+  <div class="wrap">
+    <div class="top">
+      <button class="back" id="s-back" type="button" aria-label="Back to all notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 style="margin:0;font:600 20px var(--display)">Settings</h2>
+    </div>
+
+    <div class="panel">
+      <h3>Update</h3>
+      <div class="kv">
+        <div>Installed version <b id="s-ver"></b></div>
+        <div>Status <b id="s-status">Not checked yet</b></div>
+      </div>
+      <p>Your notes stay on the phone when you update. Only the app files are replaced.</p>
+      <div class="actions"><button class="btn primary" id="s-check" type="button">Check for update</button></div>
+    </div>
+
+    <div class="panel">
+      <h3>Storage on this phone</h3>
+      <div class="kv">
+        <div>Notes <b id="s-notes">0</b></div>
+        <div>Photos <b id="s-photos">0 KB</b></div>
+        <div>Reading model <b id="s-model">not downloaded</b></div>
+        <div>Kept safe from automatic clean-up <b id="s-persist">unknown</b></div>
+      </div>
+    </div>
+
+    <div class="panel danger">
+      <h3>Delete app and all data</h3>
+      <p>Removes every note, photo and read text, the downloaded reading model and the offline app files from this phone. This cannot be undone. Export your notes first if you want to keep them.</p>
+      <div class="actions" id="s-del-1"><button class="btn danger" id="s-del" type="button">Delete everything…</button></div>
+      <div id="s-del-2" hidden>
+        <p style="color:var(--ink);margin-bottom:10px" id="s-del-sum"></p>
+        <div class="actions">
+          <button class="btn solid-danger" id="s-del-yes" type="button">Yes, delete everything</button>
+          <button class="btn" id="s-del-no" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+'use strict';
+/* ---------- storage (IndexedDB) ---------- */
+const DB='el-cuaderno', ST='notes';
+const dbp = new Promise((res,rej)=>{
+  const r=indexedDB.open(DB,1);
+  r.onupgradeneeded=()=>r.result.createObjectStore(ST,{keyPath:'id'});
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+});
+async function store(mode,fn){
+  const db=await dbp;
+  return new Promise((res,rej)=>{
+    const t=db.transaction(ST,mode), q=fn(t.objectStore(ST));
+    t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error);
+  });
+}
+const getAll=()=>store('readonly',s=>s.getAll());
+const put=n=>store('readwrite',s=>s.put(n));
+const del=id=>store('readwrite',s=>s.delete(id));
+
+/* ---------- helpers ---------- */
+const $=id=>document.getElementById(id);
+const kb=b=>b<1024*1024?Math.round(b/1024)+' KB':(b/1048576).toFixed(1)+' MB';
+const fmtDate=t=>new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+let toastT;
+function toast(msg){const el=$('toast');el.textContent=msg;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,2600)}
+function safeLS(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch{return null}}
+// iPads report themselves as Macs, so touch support is checked too
+const IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const IS_ANDROID=/Android/.test(navigator.userAgent);
+const IS_STANDALONE=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+
+/* ---------- photo cleanup + compression ---------- */
+const MAX_EDGE=1600;
+// Safari cannot write WebP, so iPhones save JPEG (a bit bigger, still small)
+const CAN_WEBP=(()=>{try{const c=document.createElement('canvas');c.width=c.height=1;return c.toDataURL('image/webp').startsWith('data:image/webp')}catch{return false}})();
+let mode=safeLS('mode')||'clean';
+function setMode(m){
+  mode=m;safeLS('mode',m);
+  $('m-clean').setAttribute('aria-pressed',m==='clean');
+  $('m-ink').setAttribute('aria-pressed',m==='ink');
+  $('modehint').textContent = m==='clean'
+    ? 'Clean: grey scan, keeps pencil and highlights. About 100–250 KB per page.'
+    : 'Ink only: pure black on white, smallest files (about 40–120 KB). Faint pencil may vanish.';
+}
+$('m-clean').onclick=()=>setMode('clean');
+$('m-ink').onclick=()=>setMode('ink');
+setMode(mode);
+
+async function decode(file){
+  try{return await createImageBitmap(file,{imageOrientation:'from-image'})}
+  catch{
+    const url=URL.createObjectURL(file);
+    try{const im=new Image();im.src=url;await im.decode();return im}
+    finally{setTimeout(()=>URL.revokeObjectURL(url),1000)}
+  }
+}
+function canvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
+function toBlob(c,type,q){return new Promise(r=>c.toBlob(r,type,q))}
+
+async function processPhoto(file,m){
+  const src=await decode(file);
+  const sw=src.width, sh=src.height, s=Math.min(1,MAX_EDGE/Math.max(sw,sh));
+  const w=Math.round(sw*s), h=Math.round(sh*s);
+  const c=canvas(w,h), g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(src,0,0,w,h);
+  const img=g.getImageData(0,0,w,h), d=img.data, n=w*h;
+  // 1) greyscale
+  for(let i=0,p=0;i<n;i++,p+=4){const v=(d[p]*77+d[p+1]*150+d[p+2]*29)>>8;d[p]=d[p+1]=d[p+2]=v}
+  g.putImageData(img,0,0);
+  // 2) estimate paper brightness per area (removes shadows and uneven light)
+  const bw=Math.max(8,Math.round(w/24)), bh=Math.max(8,Math.round(h/24));
+  const small=canvas(bw,bh), sg=small.getContext('2d');
+  sg.imageSmoothingQuality='high'; sg.drawImage(c,0,0,bw,bh);
+  const big=canvas(w,h), bg=big.getContext('2d',{willReadFrequently:true});
+  bg.imageSmoothingQuality='high'; bg.filter='blur(2px)'; bg.drawImage(small,0,0,w,h);
+  const back=bg.getImageData(0,0,w,h).data;
+  // 3) divide by background, stretch, whiten paper
+  for(let p=0;p<n*4;p+=4){
+    const r=d[p]/Math.max(40,back[p]*1.04);
+    let v;
+    if(m==='ink') v = r<0.78?0:255;
+    else{ let t=(r-0.42)/(0.88-0.42); t=t<0?0:t>1?1:t; v=Math.round(255*Math.pow(t,1.35)); if(v>235)v=255 }
+    d[p]=d[p+1]=d[p+2]=v;
+  }
+  g.putImageData(img,0,0);
+  if(src.close)src.close();
+  // 4) encode small: WebP if the phone can, else JPEG
+  let blob=CAN_WEBP?await toBlob(c,'image/webp',m==='ink'?0.4:0.5):null;
+  if(!blob||blob.type!=='image/webp') blob=await toBlob(c,'image/jpeg',m==='ink'?0.5:0.6);
+  return {blob,w,h,original:file.size};
+}
+
+async function addFiles(files){
+  for(const f of files){
+    try{
+      toast('Cleaning up photo…');
+      const r=await processPhoto(f,mode);
+      const now=Date.now();
+      const note={id:String(now)+Math.random().toString(36).slice(2,6),created:now,title:'Note '+fmtDate(now),
+        blob:r.blob,w:r.w,h:r.h,size:r.blob.size,original:r.original,text:'',mode};
+      await put(note);
+      toast(`Saved ${kb(r.blob.size)}`+(r.original?` (photo was ${kb(r.original)})`:''));
+    }catch(e){toast('That image could not be read. Try another photo.');console.error(e)}
+  }
+  try{ if(navigator.storage&&navigator.storage.persist) await navigator.storage.persist() }catch{}
+  render();
+}
+$('cam').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
+$('pick').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
+
+/* ---------- list ---------- */
+let notes=[], urls=new Map();
+function urlFor(n){if(!urls.has(n.id))urls.set(n.id,URL.createObjectURL(n.blob));return urls.get(n.id)}
+async function render(){
+  try{notes=(await getAll()).sort((a,b)=>b.created-a.created)}catch(e){notes=[];toast('Storage is blocked in this browser.')}
+  const total=notes.reduce((s,n)=>s+n.size,0);
+  $('meter').innerHTML=`${notes.length} note${notes.length===1?'':'s'} · ${kb(total)}`;
+  const q=$('q').value.trim().toLowerCase();
+  const shown=q?notes.filter(n=>(n.title+' '+n.text).toLowerCase().includes(q)):notes;
+  const grid=$('grid'); grid.textContent='';
+  for(const n of shown){
+    const b=document.createElement('button');b.className='card';b.type='button';
+    const im=document.createElement('img');im.src=urlFor(n);im.alt='';im.loading='lazy';
+    const meta=document.createElement('div');meta.className='meta';
+    const t=document.createElement('div');t.className='t';t.textContent=n.title;
+    const s=document.createElement('div');s.className='s';
+    s.innerHTML=`<span>${kb(n.size)}</span>`+(n.text?'<span class="badge">text ✓</span>':'');
+    meta.append(t,s);b.append(im,meta);b.onclick=()=>openNote(n.id);grid.append(b);
+  }
+  $('empty').hidden=notes.length>0;
+}
+$('q').oninput=render;
+
+/* ---------- detail ---------- */
+let cur=null, saveT;
+function openNote(id){
+  cur=notes.find(n=>n.id===id); if(!cur)return;
+  $('title').value=cur.title; $('text').value=cur.text||'';
+  $('photo').src=urlFor(cur);
+  $('facts').textContent=`${fmtDate(cur.created)} · ${cur.w}×${cur.h}px · ${kb(cur.size)}`+(cur.original?` (was ${kb(cur.original)})`:'');
+  $('progwrap').hidden=true; armDelete(false);
+  $('sheet').hidden=false; $('sheet').scrollTop=0;
+  history.pushState({note:id},'');
+}
+function closeNote(){ $('sheet').hidden=true; cur=null; render() }
+$('back').onclick=()=>history.back();
+addEventListener('popstate',()=>{
+  if(!$('sheet').hidden) closeNote();
+  else if(!$('export').hidden){ $('export').hidden=true; render() }
+  else if(!$('settings').hidden){ $('settings').hidden=true; render() }
+});
+function queueSave(){
+  if(!cur)return; const n=cur;
+  n.title=$('title').value.trim()||n.title; n.text=$('text').value;
+  clearTimeout(saveT); saveT=setTimeout(()=>put(n).catch(()=>toast('Could not save the edit.')),400);
+}
+$('title').oninput=queueSave; $('text').oninput=queueSave;
+
+let delArmed=false, delT;
+function armDelete(on){delArmed=on;$('del').textContent=on?'Tap again to delete':'Delete';clearTimeout(delT);if(on)delT=setTimeout(()=>armDelete(false),3000)}
+$('del').onclick=async()=>{
+  if(!cur)return; if(!delArmed)return armDelete(true);
+  const id=cur.id; await del(id); if(urls.has(id)){URL.revokeObjectURL(urls.get(id));urls.delete(id)}
+  toast('Note deleted'); history.back();
+};
+
+$('share').onclick=async()=>{
+  if(!cur)return;
+  // Photos apps handle JPEG best, so convert on the way out
+  const bmp=await decode(cur.blob), c=canvas(cur.w,cur.h);
+  c.getContext('2d').drawImage(bmp,0,0);
+  const jpg=await toBlob(c,'image/jpeg',0.8);
+  const name=(cur.title.replace(/[^\w\- ]+/g,'').trim()||'note')+'.jpg';
+  const file=new File([jpg],name,{type:'image/jpeg'});
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:cur.title}); return }
+  }catch(e){ if(e&&e.name==='AbortError')return }
+  const a=document.createElement('a');a.href=URL.createObjectURL(jpg);a.download=name;document.body.append(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
+};
+
+/* ---------- handwriting reading (on-device) ---------- */
+// Split the page into text lines, because the reading model reads one line at a time.
+async function splitLines(blob){
+  const bmp=await decode(blob);
+  const s=Math.min(1,1400/bmp.width), w=Math.round(bmp.width*s), h=Math.round(bmp.height*s);
+  const c=canvas(w,h), g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(bmp,0,0,w,h);
+  const d=g.getImageData(0,0,w,h).data;
+  const ink=new Uint8Array(w*h), rows=new Float32Array(h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ if(d[(y*w+x)*4]<140){ink[y*w+x]=1;rows[y]++} }
+  const sm=rows.map((_,y)=>(rows[y-1]||0)/4+rows[y]/2+(rows[y+1]||0)/4);
+  const thr=Math.max(3,w*0.006);
+  let bands=[],start=-1;
+  for(let y=0;y<h;y++){ if(sm[y]>thr){if(start<0)start=y} else if(start>=0){bands.push([start,y]);start=-1} }
+  if(start>=0)bands.push([start,h]);
+  bands=bands.filter(b=>b[1]-b[0]>=8);
+  if(!bands.length) return [];
+  // merge bands split by small gaps (dots, accents)
+  const hs=bands.map(b=>b[1]-b[0]).sort((a,b)=>a-b), med=hs[hs.length>>1];
+  const merged=[bands[0]];
+  for(const b of bands.slice(1)){const last=merged[merged.length-1]; if(b[0]-last[1]<med*0.25||(b[1]-b[0])<med*0.35)last[1]=b[1]; else merged.push(b)}
+  // split bands that are probably two touching lines
+  const out=[];
+  const split=(a,b)=>{
+    if(b-a<med*1.8||b-a<24){out.push([a,b]);return}
+    let best=-1,bv=1e9; for(let y=a+Math.floor((b-a)*0.25);y<b-Math.floor((b-a)*0.25);y++){if(sm[y]<bv){bv=sm[y];best=y}}
+    split(a,best);split(best,b);
+  };
+  merged.forEach(([a,b])=>split(a,b));
+  const blobs=[];
+  for(const [a,b] of out.slice(0,60)){
+    let x0=w,x1=0;
+    for(let y=a;y<b;y++)for(let x=0;x<w;x++)if(ink[y*w+x]){if(x<x0)x0=x;if(x>x1)x1=x}
+    if(x1-x0<10)continue;
+    const pad=10, X=Math.max(0,x0-pad), Y=Math.max(0,a-pad), W=Math.min(w,x1+pad)-X, H=Math.min(h,b+pad)-Y;
+    const lc=canvas(W,H), lg=lc.getContext('2d'); lg.fillStyle='#fff'; lg.fillRect(0,0,W,H); lg.drawImage(c,X,Y,W,H,0,0,W,H);
+    blobs.push(await toBlob(lc,'image/png'));
+  }
+  return blobs;
+}
+
+// The reader needs WebAssembly SIMD: iPhone with iOS 16.4 or newer, any recent Android Chrome.
+const CAN_READ=(()=>{try{return typeof WebAssembly==='object'&&WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]))}catch{return false}})();
+let worker=null, busy=false;
+function getWorker(){ if(!worker) worker=new Worker('ocr-worker.js',{type:'module'}); return worker }
+function setProg(frac,txt){ $('progwrap').hidden=false; $('progfill').style.width=Math.round(frac*100)+'%'; $('progtxt').textContent=txt }
+
+$('read').onclick=async()=>{
+  if(!cur||busy)return;
+  if(!CAN_READ){ setProg(0,'Reading handwriting needs a newer system: iOS 16.4 or later on iPhone, or an up-to-date Chrome on Android. Everything else in the app works. You can still type the text yourself.'); return }
+  const note=cur; busy=true; $('read').disabled=true;
+  try{
+    setProg(0,'Finding lines…');
+    const lines=await splitLines(note.blob);
+    if(!lines.length){setProg(0,'No handwriting found. Try “Clean” mode or a sharper photo.');return}
+    const w=getWorker(), files={};
+    const text=await new Promise((res,rej)=>{
+      w.onmessage=e=>{
+        const m=e.data;
+        if(m.type==='progress'){
+          const p=m.p; if(p.status==='progress'&&p.total){files[p.file]={l:p.loaded,t:p.total}}
+          const L=Object.values(files).reduce((s,f)=>s+f.l,0), T=Object.values(files).reduce((s,f)=>s+f.t,0);
+          if(T) setProg(L/T,`Downloading reading model (one time): ${kb(L)} of ${kb(T)}`);
+        } else if(m.type==='ready'){ setProg(0,`Reading line 1 of ${lines.length}…`) }
+        else if(m.type==='line'){
+          setProg((m.i+1)/m.n,`Reading line ${Math.min(m.i+2,m.n)} of ${m.n}…`);
+          if(cur===note){ $('text').value=m.partial }
+        }
+        else if(m.type==='done') res(m.text);
+        else if(m.type==='error') rej(new Error(m.message));
+      };
+      w.onerror=e=>rej(new Error(e.message||'could not load the reader. The first use needs an internet connection.'));
+      w.postMessage({lines});
+    });
+    note.text=text; await put(note);
+    if(cur===note) $('text').value=text;
+    setProg(1,`Done. ${lines.length} lines read on this phone. Fix any wrong words above.`);
+  }catch(e){
+    console.error(e); worker&&worker.terminate(); worker=null;
+    setProg(0,navigator.onLine?'Reading failed: '+e.message:'The reading model is not downloaded yet. Connect to the internet once and try again.');
+  }finally{ busy=false; $('read').disabled=false }
+};
+
+/* ---------- export by day / week ---------- */
+const DAY=86400000;
+const sod=t=>{const d=new Date(t);d.setHours(0,0,0,0);return d.getTime()};
+const addDays=(t,n)=>{const d=new Date(t);d.setDate(d.getDate()+n);return d.getTime()};
+const sow=t=>addDays(sod(t),-((new Date(t).getDay()+6)%7));   // weeks start on Monday
+const ymd=t=>{const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const parseYmd=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d).getTime()};
+function isoWeek(t){const d=new Date(sod(t));d.setDate(d.getDate()+3-((d.getDay()+6)%7));const w1=new Date(d.getFullYear(),0,4);return 1+Math.round(((d-w1)/DAY-3+((w1.getDay()+6)%7))/7)}
+const longDay=t=>new Date(t).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const shortDay=t=>new Date(t).toLocaleDateString(undefined,{day:'numeric',month:'short'});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function setRange(kind){
+  const today=sod(Date.now()); let f,t;
+  if(kind==='today'){f=t=today}
+  else if(kind==='yesterday'){f=t=addDays(today,-1)}
+  else if(kind==='week'){f=sow(today);t=addDays(f,6)}
+  else if(kind==='lastweek'){f=addDays(sow(today),-7);t=addDays(f,6)}
+  else { const ts=notes.map(n=>n.created); f=ts.length?sod(Math.min(...ts)):today; t=today }
+  $('x-from').value=ymd(f); $('x-to').value=ymd(t);
+  document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.r===kind));
+  safeLS('range',kind); renderExport();
+}
+function selected(){
+  const f=$('x-from').value, t=$('x-to').value; if(!f||!t)return [];
+  let a=parseYmd(f), b=addDays(parseYmd(t),1); if(b<=a){const x=a;a=addDays(b,-1);b=addDays(x,1)}
+  return notes.filter(n=>n.created>=a&&n.created<b).sort((x,y)=>x.created-y.created);
+}
+function byDay(list){const m=new Map();for(const n of list){const k=ymd(n.created);if(!m.has(k))m.set(k,[]);m.get(k).push(n)}return m}
+function rangeLabel(list){
+  if(!list.length)return 'Notes';
+  const a=list[0].created, b=list[list.length-1].created;
+  if(ymd(a)===ymd(b)) return 'Notes '+longDay(a);
+  const wk=sow(a)===sow(b)?` (week ${isoWeek(a)})`:'';
+  return `Notes ${shortDay(a)} – ${shortDay(b)} ${new Date(b).getFullYear()}${wk}`;
+}
+
+// JPEG copies for export, made ahead of time so Share still counts as your tap
+const jpgCache=new Map();
+async function jpegFor(n){
+  if(jpgCache.has(n.id))return jpgCache.get(n.id);
+  const bmp=await decode(n.blob), c=canvas(n.w,n.h); c.getContext('2d').drawImage(bmp,0,0);
+  const j=await toBlob(c,'image/jpeg',0.75); jpgCache.set(n.id,j); return j;
+}
+const b64=blob=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(blob)});
+
+function buildText(list){
+  let out=rangeLabel(list)+'\n';
+  for(const [k,ns] of byDay(list)){
+    out+=`\n== ${longDay(ns[0].created)} ==\n`;
+    for(const n of ns){ out+=`\n${n.title}\n${n.text?n.text.trim():'(not read yet, see photo)'}\n` }
+  }
+  return out;
+}
+async function buildHTML(list,photos){
+  let h=`<h1>${esc(rangeLabel(list))}</h1>`;
+  for(const [k,ns] of byDay(list)){
+    h+=`<h2>${esc(longDay(ns[0].created))}</h2>`;
+    for(const n of ns){
+      h+=`<h3>${esc(n.title)}</h3>`;
+      h+= n.text ? `<p>${esc(n.text.trim()).replace(/\n/g,'<br>')}</p>` : `<p><i>Not read yet</i></p>`;
+      if(photos){ const src=await b64(await jpegFor(n)); h+=`<p><img src="${src}" width="480" alt="${esc(n.title)}"></p>` }
+    }
+  }
+  return h;
+}
+function copyNotes(list,photos){
+  if(!list.length){toast('No notes in this range.');return}
+  const text=buildText(list);
+  const done=()=>toast(`Copied ${list.length} note${list.length>1?'s':''}. Paste into a OneNote page.`);
+  if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+    // promises keep the tap "fresh" in Safari while photos are being converted
+    const item=new ClipboardItem({
+      'text/html':buildHTML(list,photos).then(h=>new Blob([h],{type:'text/html'})),
+      'text/plain':Promise.resolve(new Blob([text],{type:'text/plain'}))
+    });
+    navigator.clipboard.write([item]).then(done).catch(()=>
+      navigator.clipboard.writeText(text).then(()=>toast('Copied the text only. Use Share for the photos.'))
+        .catch(()=>toast('Copying was blocked. Use Share or Download instead.')));
+  } else if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>toast('Copied the text only. Use Share for the photos.')).catch(()=>toast('Copying was blocked. Use Share or Download instead.'));
+  } else toast('This browser cannot copy. Use Share or Download instead.');
+}
+
+function renderExport(){
+  const list=selected(), groups=byDay(list), read=list.filter(n=>n.text).length;
+  const size=list.reduce((s,n)=>s+n.size,0);
+  $('x-sum').textContent=list.length
+    ? `${list.length} note${list.length>1?'s':''} on ${groups.size} day${groups.size>1?'s':''} · ${read} with text · ${kb(size)} of photos`
+    : 'No notes in this range.';
+  const box=$('x-days'); box.textContent='';
+  for(const [k,ns] of groups){
+    const d=document.createElement('div');d.className='day';
+    const h=document.createElement('h3');h.textContent=longDay(ns[0].created);
+    const ul=document.createElement('ul');
+    for(const n of ns){const li=document.createElement('li');li.textContent=n.title;if(n.text){const s=document.createElement('span');s.textContent='text';li.append(s)}ul.append(li)}
+    d.append(h,ul);box.append(d);
+  }
+  ['x-copy','x-share','x-dl'].forEach(id=>$(id).disabled=!list.length);
+  if($('x-photos').checked) list.forEach(n=>jpegFor(n).catch(()=>{}));
+  prepareDownload().catch(()=>{});
+}
+
+$('open-export').onclick=()=>{
+  $('export').hidden=false; $('export').scrollTop=0; history.pushState({export:1},'');
+  setRange(safeLS('range')||'week');
+};
+$('x-back').onclick=()=>history.back();
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>setRange(c.dataset.r));
+$('x-from').onchange=$('x-to').onchange=()=>{document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed','false'));renderExport()};
+$('x-photos').onchange=renderExport;
+$('x-copy').onclick=()=>copyNotes(selected(),$('x-photos').checked);
+$('copy1').onclick=()=>{ if(cur) copyNotes([cur],true) };
+
+$('x-share').onclick=async()=>{
+  const list=selected(); if(!list.length)return;
+  const text=buildText(list), files=[];
+  if($('x-photos').checked){
+    for(const n of list){const j=jgCacheGet(n);if(!j){toast('Preparing photos, tap Share again in a moment.');list.forEach(x=>jpegFor(x));return} files.push(new File([j],`${ymd(n.created)} ${n.title.replace(/[^\w\- ]+/g,'').trim()||'note'}.jpg`,{type:'image/jpeg'}))}
+  }
+  const data=files.length?{title:rangeLabel(list),text,files}:{title:rangeLabel(list),text};
+  try{
+    if(!navigator.share||(files.length&&navigator.canShare&&!navigator.canShare({files}))){toast('Sharing is not available here. Use Copy or Download.');return}
+    await navigator.share(data);
+  }catch(e){ if(!(e&&e.name==='AbortError')) toast('Sharing failed. Use Copy or Download.') }
+};
+function jgCacheGet(n){return jpgCache.get(n.id)}
+
+// The export file is built ahead of time, because iPhones only allow "Save to Files" straight after a tap.
+let dlKey='', dlFile=null, dlBuilding=null;
+function exportKey(){ return $('x-from').value+'|'+$('x-to').value+'|'+$('x-photos').checked+'|'+selected().map(n=>n.id+':'+(n.text||'').length+':'+n.title).join(',') }
+function prepareDownload(){
+  const list=selected(), key=exportKey();
+  if(key===dlKey&&(dlFile||dlBuilding)) return dlBuilding||Promise.resolve(dlFile);
+  dlKey=key; dlFile=null; if(!list.length) return (dlBuilding=null,Promise.resolve(null));
+  dlBuilding=buildHTML(list,$('x-photos').checked).then(body=>{
+    const doc=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(rangeLabel(list))}</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:720px;margin:24px auto;padding:0 16px}img{max-width:100%;border:1px solid #ddd}h2{margin-top:32px}</style></head><body>${body}</body></html>`;
+    const a=list[0].created, b=list[list.length-1].created;
+    const name=ymd(a)===ymd(b)?`cuaderno-${ymd(a)}.html`:(sow(a)===sow(b)?`cuaderno-${new Date(a).getFullYear()}-week-${isoWeek(a)}.html`:`cuaderno-${ymd(a)}-to-${ymd(b)}.html`);
+    if(dlKey===key) dlFile=new File([doc],name,{type:'text/html'});
+    dlBuilding=null; return dlFile;
+  });
+  return dlBuilding;
+}
+$('x-dl').onclick=async()=>{
+  if(!selected().length)return;
+  let f=(exportKey()===dlKey)?dlFile:null;
+  if(!f && IS_IOS){ prepareDownload(); toast('Preparing the file… tap Download again in a second.'); return }
+  if(!f) f=await prepareDownload();
+  if(!f) return;
+  if(IS_IOS && navigator.canShare && navigator.canShare({files:[f]})){
+    // on iPhone a share sheet with "Save to Files" is the reliable way, also inside the Home Screen app
+    try{ await navigator.share({files:[f]}); }
+    catch(e){ if(e&&e.name==='NotAllowedError') toast('Tap Download again to save the file.'); else if(!(e&&e.name==='AbortError')) toast('Saving failed. Use Copy instead.') }
+    return;
+  }
+  const url=URL.createObjectURL(f);
+  const el=document.createElement('a');el.href=url;el.download=f.name;document.body.append(el);el.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);el.remove()},3000);
+  toast('Saved '+f.name+' to Downloads');
+};
+
+/* ---------- version, update, delete ---------- */
+const APP_VERSION='1.0.1';   // keep in step with VERSION in sw.js
+$('s-ver').textContent=APP_VERSION;
+let reg=null, reloading=false, userUpdating=false;
+
+function showUpdateReady(){ $('upd').hidden=false; $('s-status').textContent='New version downloaded, ready to install' ; $('s-check').textContent='Install update' }
+function watchInstalling(w){ w.addEventListener('statechange',()=>{ if(w.state==='installed'&&navigator.serviceWorker.controller) showUpdateReady() }) }
+function applyUpdate(){
+  if(reg&&reg.waiting){ userUpdating=true; reg.waiting.postMessage('SKIP_WAITING') } else location.reload();
+}
+$('upd-now').onclick=applyUpdate;
+
+if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+  navigator.serviceWorker.register('sw.js').then(r=>{
+    reg=r;
+    if(r.waiting&&navigator.serviceWorker.controller) showUpdateReady();
+    r.addEventListener('updatefound',()=>r.installing&&watchInstalling(r.installing));
+  }).catch(()=>{});
+  // reload only when you tapped Update, not when the app installs itself the first time
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(userUpdating&&!reloading){reloading=true;location.reload()} });
+}
+
+$('s-check').onclick=async()=>{
+  if(reg&&reg.waiting) return applyUpdate();
+  if(!reg){ $('s-status').textContent='Updates work once the app is opened from its web address (https).'; return }
+  if(!navigator.onLine){ $('s-status').textContent='You are offline. Connect to the internet and check again.'; return }
+  $('s-status').textContent='Checking…'; $('s-check').disabled=true;
+  try{
+    await reg.update();
+    const w=reg.installing||reg.waiting;
+    if(!w){ $('s-status').textContent=`You have the latest version (${APP_VERSION}).` }
+    else if(w.state==='installed'){ showUpdateReady() }
+    else { $('s-status').textContent='Downloading new version…'; watchInstalling(w) }
+  }catch{ $('s-status').textContent='Could not reach the app’s website. Try again later.' }
+  finally{ $('s-check').disabled=false }
+};
+
+async function modelSize(){
+  try{
+    if(!window.caches||!(await caches.has('transformers-cache')))return 'not downloaded';
+    const c=await caches.open('transformers-cache'), ks=await c.keys(); let s=0;
+    for(const k of ks){const r=await c.match(k);const l=r&&r.headers.get('content-length');s+=l?+l:0}
+    return ks.length?(s?kb(s):'downloaded'):'not downloaded';
+  }catch{return 'unknown'}
+}
+async function openSettings(){
+  $('settings').hidden=false; $('settings').scrollTop=0; history.pushState({settings:1},'');
+  $('s-del-1').hidden=false; $('s-del-2').hidden=true;
+  $('s-notes').textContent=notes.length;
+  $('s-photos').textContent=kb(notes.reduce((s,n)=>s+n.size,0));
+  $('s-model').textContent='checking…'; $('s-model').textContent=await modelSize();
+  try{ $('s-persist').textContent=(navigator.storage&&navigator.storage.persisted&&await navigator.storage.persisted())?'yes':'no' }catch{}
+}
+$('open-settings').onclick=openSettings;
+$('s-back').onclick=()=>history.back();
+$('s-del').onclick=()=>{
+  $('s-del-sum').textContent=`This deletes ${notes.length} note${notes.length===1?'':'s'} (${kb(notes.reduce((s,n)=>s+n.size,0))}) and everything else El Cuaderno stored on this phone.`;
+  $('s-del-1').hidden=true; $('s-del-2').hidden=false;
+};
+$('s-del-no').onclick=()=>{ $('s-del-1').hidden=false; $('s-del-2').hidden=true };
+
+async function wipeEverything(){
+  try{ worker&&worker.terminate() }catch{}
+  try{ (await dbp).close() }catch{}
+  const dbNames=[DB];
+  try{ if(indexedDB.databases) for(const d of await indexedDB.databases()) if(d.name&&!dbNames.includes(d.name)) dbNames.push(d.name) }catch{}
+  for(const name of dbNames) await new Promise(r=>{const q=indexedDB.deleteDatabase(name);q.onsuccess=q.onerror=q.onblocked=()=>r()});
+  try{ if(window.caches) for(const k of await caches.keys()) await caches.delete(k) }catch{}
+  try{ localStorage.clear(); sessionStorage.clear() }catch{}
+  try{ if(navigator.serviceWorker) for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister() }catch{}
+  urls.forEach(u=>URL.revokeObjectURL(u)); urls.clear(); jpgCache.clear();
+}
+$('s-del-yes').onclick=async()=>{
+  $('s-del-yes').disabled=true; $('s-del-yes').textContent='Deleting…';
+  await wipeEverything();
+  document.body.innerHTML=`<main class="gone">
+    <h1>El Cuaderno is deleted</h1>
+    <p>All notes, photos, read text, the reading model and the offline files are gone from this phone.</p>
+    <p><b>Last step:</b> remove the icon from your home screen. Press and hold the El Cuaderno icon, then choose <b>Remove App</b> (iPhone) or <b>Uninstall</b> / <b>Remove</b> (Android).</p>
+    <p>Changed your mind? Open the app's web address again to start fresh.</p>
+  </main>`;
+};
+
+/* ---------- install on home screen ---------- */
+// On iPhone, notes saved in Safari and in the Home Screen app are kept apart,
+// and Safari may clear website data after some weeks of no use. The Home Screen app is kept.
+let installEvt=null;
+addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; showInstall() });
+addEventListener('appinstalled',()=>{ $('install').hidden=true; installEvt=null });
+function showInstall(){
+  if(IS_STANDALONE||safeLS('installHidden')==='1')return;
+  if(IS_IOS){
+    $('install-txt').innerHTML='Install El Cuaderno: tap <b>Share</b> <svg style="width:16px;height:16px;vertical-align:-3px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5v10h14V11h-1"/></svg> then <b>Add to Home Screen</b>. Use the app from the Home Screen icon from then on; notes taken in Safari stay in Safari.';
+  } else if(installEvt){
+    $('install-txt').textContent='Install El Cuaderno on your phone so it opens like an app and works offline.';
+    $('install-btn').hidden=false;
+  } else if(IS_ANDROID){
+    $('install-txt').innerHTML='Install El Cuaderno: open the browser menu <b>⋮</b> and choose <b>Install app</b> or <b>Add to Home screen</b>.';
+  } else return;
+  $('install').hidden=false;
+}
+$('install-btn').onclick=async()=>{ if(!installEvt)return; installEvt.prompt(); try{await installEvt.userChoice}catch{} installEvt=null; $('install').hidden=true };
+$('install-x').onclick=()=>{ safeLS('installHidden','1'); $('install').hidden=true };
+showInstall();
+
+/* ---------- start ---------- */
+render();
+</script>
+</body>
+</html>
