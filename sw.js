@@ -1,8 +1,8 @@
 // El Cuaderno service worker: keeps the app working offline and handles updates.
 // To publish an update: change VERSION here AND APP_VERSION in index.html, then upload both.
-// The reading model has its own cache ("transformers-cache") and survives app updates.
-const VERSION = 'el-cuaderno-v1.0.1';
-const SHELL = ['./', './index.html', './ocr-worker.js', './manifest.json', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
+// Handwriting is read by the phone itself (Live Text / Google Lens), so there is no model to cache.
+const VERSION = 'el-cuaderno-v1.1.0';
+const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
   // cache: 'reload' skips GitHub Pages' 10-minute browser cache so a new version gets new files
@@ -17,7 +17,7 @@ self.addEventListener('message', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('el-cuaderno-') && k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => (k.startsWith('el-cuaderno-') && k !== VERSION) || k === 'transformers-cache').map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -28,7 +28,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === location.origin;
   const library = url.hostname === 'cdn.jsdelivr.net' || url.hostname.endsWith('fonts.googleapis.com') || url.hostname.endsWith('fonts.gstatic.com');
-  if (!sameOrigin && !library) return; // model downloads go straight to the network
+  if (!sameOrigin && !library) return;
 
   if (sameOrigin) {
     // app files come from this version's cache, so the app only changes when you choose to update

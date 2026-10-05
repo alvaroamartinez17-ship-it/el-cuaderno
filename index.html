@@ -109,6 +109,11 @@ h1 span{color:var(--accent)}
 .day ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
 .day li span{color:var(--accent);font-size:12px;margin-left:6px}
 .sec{font-weight:700;margin-top:22px}
+.steps{margin:4px 0 14px;padding-left:22px;display:grid;gap:6px;font-size:15px}
+.live{-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
+.reader-wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 110px)!important}
+#reader .bar{z-index:2}
+#reader .bar .btn{white-space:normal;flex:1 1 0;min-width:0;font-size:15px;line-height:1.2;text-align:center}
 
 /* header extras, update banner, settings */
 .hright{display:flex;align-items:center;gap:8px}
@@ -189,14 +194,30 @@ h1 span{color:var(--accent)}
       <button class="btn danger" id="del" type="button">Delete</button>
     </div>
     <div class="ocr">
-      <div id="progwrap" hidden>
-        <div class="progbar"><i id="progfill"></i></div>
-        <div class="prog" id="progtxt"></div>
-      </div>
       <label for="text">Text</label>
       <textarea id="text" placeholder="Tap “Read handwriting”, or type what the note says. Edits save automatically."></textarea>
-      <p class="note">Reading runs on this phone. The first time, it downloads the reading model (about 60 MB) once; after that it works offline. Your photos never leave the phone. The model was trained on English handwriting, so expect to fix words, especially in other languages.</p>
+      <p class="note">“Read handwriting” uses your phone’s own text recognition: Live Text on iPhone (works offline, nothing leaves the phone) or Google Lens on Android.</p>
     </div>
+  </div>
+</section>
+
+<section class="sheet" id="reader" hidden aria-label="Read handwriting">
+  <div class="wrap reader-wrap">
+    <div class="top">
+      <button class="back" id="r-back" type="button" aria-label="Back to the note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 style="margin:0;font:600 20px var(--display)">Read handwriting</h2>
+    </div>
+    <ol class="steps" id="r-steps"></ol>
+    <img class="photo live" id="r-photo" alt="Photo of the handwritten note. Press and hold on the writing to select it.">
+    <p class="note" id="r-altnote"></p>
+    <div class="ocr">
+      <label for="r-text">Text of this note</label>
+      <textarea id="r-text" placeholder="Pasted text appears here. You can also type or fix words."></textarea>
+    </div>
+  </div>
+  <div class="bar">
+    <button class="btn primary" id="r-paste" type="button">Paste copied text</button>
+    <button class="btn" id="r-alt" type="button">Open in Photos</button>
   </div>
 </section>
 
@@ -252,14 +273,13 @@ h1 span{color:var(--accent)}
       <div class="kv">
         <div>Notes <b id="s-notes">0</b></div>
         <div>Photos <b id="s-photos">0 KB</b></div>
-        <div>Reading model <b id="s-model">not downloaded</b></div>
         <div>Kept safe from automatic clean-up <b id="s-persist">unknown</b></div>
       </div>
     </div>
 
     <div class="panel danger">
       <h3>Delete app and all data</h3>
-      <p>Removes every note, photo and read text, the downloaded reading model and the offline app files from this phone. This cannot be undone. Export your notes first if you want to keep them.</p>
+      <p>Removes every note, photo and text and the offline app files from this phone. This cannot be undone. Export your notes first if you want to keep them.</p>
       <div class="actions" id="s-del-1"><button class="btn danger" id="s-del" type="button">Delete everything…</button></div>
       <div id="s-del-2" hidden>
         <p style="color:var(--ink);margin-bottom:10px" id="s-del-sum"></p>
@@ -415,14 +435,15 @@ function openNote(id){
   $('title').value=cur.title; $('text').value=cur.text||'';
   $('photo').src=urlFor(cur);
   $('facts').textContent=`${fmtDate(cur.created)} · ${cur.w}×${cur.h}px · ${kb(cur.size)}`+(cur.original?` (was ${kb(cur.original)})`:'');
-  $('progwrap').hidden=true; armDelete(false);
+  armDelete(false);
   $('sheet').hidden=false; $('sheet').scrollTop=0;
   history.pushState({note:id},'');
 }
 function closeNote(){ $('sheet').hidden=true; cur=null; render() }
 $('back').onclick=()=>history.back();
 addEventListener('popstate',()=>{
-  if(!$('sheet').hidden) closeNote();
+  if(!$('reader').hidden) closeReader();
+  else if(!$('sheet').hidden) closeNote();
   else if(!$('export').hidden){ $('export').hidden=true; render() }
   else if(!$('settings').hidden){ $('settings').hidden=true; render() }
 });
@@ -444,9 +465,7 @@ $('del').onclick=async()=>{
 $('share').onclick=async()=>{
   if(!cur)return;
   // Photos apps handle JPEG best, so convert on the way out
-  const bmp=await decode(cur.blob), c=canvas(cur.w,cur.h);
-  c.getContext('2d').drawImage(bmp,0,0);
-  const jpg=await toBlob(c,'image/jpeg',0.8);
+  const jpg=await jpegFor(cur);
   const name=(cur.title.replace(/[^\w\- ]+/g,'').trim()||'note')+'.jpg';
   const file=new File([jpg],name,{type:'image/jpeg'});
   try{
@@ -456,87 +475,52 @@ $('share').onclick=async()=>{
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
 };
 
-/* ---------- handwriting reading (on-device) ---------- */
-// Split the page into text lines, because the reading model reads one line at a time.
-async function splitLines(blob){
-  const bmp=await decode(blob);
-  const s=Math.min(1,1400/bmp.width), w=Math.round(bmp.width*s), h=Math.round(bmp.height*s);
-  const c=canvas(w,h), g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(bmp,0,0,w,h);
-  const d=g.getImageData(0,0,w,h).data;
-  const ink=new Uint8Array(w*h), rows=new Float32Array(h);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ if(d[(y*w+x)*4]<140){ink[y*w+x]=1;rows[y]++} }
-  const sm=rows.map((_,y)=>(rows[y-1]||0)/4+rows[y]/2+(rows[y+1]||0)/4);
-  const thr=Math.max(3,w*0.006);
-  let bands=[],start=-1;
-  for(let y=0;y<h;y++){ if(sm[y]>thr){if(start<0)start=y} else if(start>=0){bands.push([start,y]);start=-1} }
-  if(start>=0)bands.push([start,h]);
-  bands=bands.filter(b=>b[1]-b[0]>=8);
-  if(!bands.length) return [];
-  // merge bands split by small gaps (dots, accents)
-  const hs=bands.map(b=>b[1]-b[0]).sort((a,b)=>a-b), med=hs[hs.length>>1];
-  const merged=[bands[0]];
-  for(const b of bands.slice(1)){const last=merged[merged.length-1]; if(b[0]-last[1]<med*0.25||(b[1]-b[0])<med*0.35)last[1]=b[1]; else merged.push(b)}
-  // split bands that are probably two touching lines
-  const out=[];
-  const split=(a,b)=>{
-    if(b-a<med*1.8||b-a<24){out.push([a,b]);return}
-    let best=-1,bv=1e9; for(let y=a+Math.floor((b-a)*0.25);y<b-Math.floor((b-a)*0.25);y++){if(sm[y]<bv){bv=sm[y];best=y}}
-    split(a,best);split(best,b);
-  };
-  merged.forEach(([a,b])=>split(a,b));
-  const blobs=[];
-  for(const [a,b] of out.slice(0,60)){
-    let x0=w,x1=0;
-    for(let y=a;y<b;y++)for(let x=0;x<w;x++)if(ink[y*w+x]){if(x<x0)x0=x;if(x>x1)x1=x}
-    if(x1-x0<10)continue;
-    const pad=10, X=Math.max(0,x0-pad), Y=Math.max(0,a-pad), W=Math.min(w,x1+pad)-X, H=Math.min(h,b+pad)-Y;
-    const lc=canvas(W,H), lg=lc.getContext('2d'); lg.fillStyle='#fff'; lg.fillRect(0,0,W,H); lg.drawImage(c,X,Y,W,H,0,0,W,H);
-    blobs.push(await toBlob(lc,'image/png'));
-  }
-  return blobs;
+/* ---------- handwriting reading with the phone's own reader ---------- */
+// iPhone: Live Text (Apple, runs on the phone). Android: Google Lens. The app only shows the photo and takes the pasted text.
+function readerSteps(){
+  if(IS_IOS) return {
+    steps:['Press and hold on a word in the photo until it is highlighted.',
+           'Drag the handles over the text, or tap <b>Select All</b>, then tap <b>Copy</b>.',
+           'Tap <b>Paste copied text</b>. Repeat for other parts of the page.'],
+    alt:'Open in Photos',
+    note:'Nothing gets highlighted? Tap <b>Open in Photos</b> and choose <b>Save Image</b>. Open the Photos app, tap the Live Text button at the bottom right of the photo, then <b>Select All</b> → <b>Copy</b>. Come back and tap <b>Paste copied text</b>. You can delete the photo from Photos afterwards.'};
+  if(IS_ANDROID) return {
+    steps:['Tap <b>Open in Google Lens</b> and pick <b>Google Lens</b> (or <b>Search image</b>) in the list.',
+           'In Lens tap <b>Text</b>, then <b>Select all</b> → <b>Copy text</b>.',
+           'Come back here and tap <b>Paste copied text</b>.'],
+    alt:'Open in Google Lens',
+    note:'Other ways: press and hold the photo and choose <b>Search image with Google Lens</b>, or use <b>Circle to Search</b> on Pixel and Samsung phones. Google Lens usually needs internet.'};
+  return {steps:['Select the text in the photo with your device’s text recognition and copy it.','Tap <b>Paste copied text</b>.'],alt:'Share photo',note:''};
 }
-
-// The reader needs WebAssembly SIMD: iPhone with iOS 16.4 or newer, any recent Android Chrome.
-const CAN_READ=(()=>{try{return typeof WebAssembly==='object'&&WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]))}catch{return false}})();
-let worker=null, busy=false;
-function getWorker(){ if(!worker) worker=new Worker('ocr-worker.js',{type:'module'}); return worker }
-function setProg(frac,txt){ $('progwrap').hidden=false; $('progfill').style.width=Math.round(frac*100)+'%'; $('progtxt').textContent=txt }
-
-$('read').onclick=async()=>{
-  if(!cur||busy)return;
-  if(!CAN_READ){ setProg(0,'Reading handwriting needs a newer system: iOS 16.4 or later on iPhone, or an up-to-date Chrome on Android. Everything else in the app works. You can still type the text yourself.'); return }
-  const note=cur; busy=true; $('read').disabled=true;
-  try{
-    setProg(0,'Finding lines…');
-    const lines=await splitLines(note.blob);
-    if(!lines.length){setProg(0,'No handwriting found. Try “Clean” mode or a sharper photo.');return}
-    const w=getWorker(), files={};
-    const text=await new Promise((res,rej)=>{
-      w.onmessage=e=>{
-        const m=e.data;
-        if(m.type==='progress'){
-          const p=m.p; if(p.status==='progress'&&p.total){files[p.file]={l:p.loaded,t:p.total}}
-          const L=Object.values(files).reduce((s,f)=>s+f.l,0), T=Object.values(files).reduce((s,f)=>s+f.t,0);
-          if(T) setProg(L/T,`Downloading reading model (one time): ${kb(L)} of ${kb(T)}`);
-        } else if(m.type==='ready'){ setProg(0,`Reading line 1 of ${lines.length}…`) }
-        else if(m.type==='line'){
-          setProg((m.i+1)/m.n,`Reading line ${Math.min(m.i+2,m.n)} of ${m.n}…`);
-          if(cur===note){ $('text').value=m.partial }
-        }
-        else if(m.type==='done') res(m.text);
-        else if(m.type==='error') rej(new Error(m.message));
-      };
-      w.onerror=e=>rej(new Error(e.message||'could not load the reader. The first use needs an internet connection.'));
-      w.postMessage({lines});
-    });
-    note.text=text; await put(note);
-    if(cur===note) $('text').value=text;
-    setProg(1,`Done. ${lines.length} lines read on this phone. Fix any wrong words above.`);
-  }catch(e){
-    console.error(e); worker&&worker.terminate(); worker=null;
-    setProg(0,navigator.onLine?'Reading failed: '+e.message:'The reading model is not downloaded yet. Connect to the internet once and try again.');
-  }finally{ busy=false; $('read').disabled=false }
+function openReader(){
+  if(!cur)return;
+  const s=readerSteps();
+  $('r-steps').innerHTML=s.steps.map(x=>`<li>${x}</li>`).join('');
+  $('r-alt').textContent=s.alt; $('r-altnote').innerHTML=s.note; $('r-altnote').hidden=!s.note;
+  $('r-photo').src=urlFor(cur); $('r-text').value=cur.text||'';
+  jpegFor(cur).catch(()=>{});          // ready in advance, so sharing still counts as your tap
+  $('reader').hidden=false; $('reader').scrollTop=0;
+  history.pushState({reader:1},'');
+}
+function closeReader(){ $('reader').hidden=true; if(cur) $('text').value=cur.text||'' }
+function addText(t){
+  t=(t||'').trim(); if(!t||!cur)return false;
+  cur.text=(cur.text&&cur.text.trim()?cur.text.trimEnd()+'\n':'')+t;
+  $('r-text').value=cur.text; $('text').value=cur.text;
+  put(cur).catch(()=>toast('Could not save the text.'));
+  return true;
+}
+$('read').onclick=openReader;
+$('r-back').onclick=()=>history.back();
+$('r-paste').onclick=async()=>{
+  let t='';
+  try{ if(navigator.clipboard&&navigator.clipboard.readText) t=await navigator.clipboard.readText() }catch{}
+  if(addText(t)){ const n=t.trim().split(/\s+/).length; toast(`Added ${n} word${n===1?'':'s'} to the note`); return }
+  const ta=$('r-text'); ta.focus(); try{ta.setSelectionRange(ta.value.length,ta.value.length)}catch{}
+  toast('Press and hold in the text box and tap Paste.');
 };
+$('r-text').oninput=()=>{ if(!cur)return; $('text').value=$('r-text').value; queueSave() };
+$('r-alt').onclick=()=>$('share').onclick();
 
 /* ---------- export by day / week ---------- */
 const DAY=86400000;
@@ -701,7 +685,7 @@ $('x-dl').onclick=async()=>{
 };
 
 /* ---------- version, update, delete ---------- */
-const APP_VERSION='1.0.1';   // keep in step with VERSION in sw.js
+const APP_VERSION='1.1.0';   // keep in step with VERSION in sw.js
 $('s-ver').textContent=APP_VERSION;
 let reg=null, reloading=false, userUpdating=false;
 
@@ -737,20 +721,11 @@ $('s-check').onclick=async()=>{
   finally{ $('s-check').disabled=false }
 };
 
-async function modelSize(){
-  try{
-    if(!window.caches||!(await caches.has('transformers-cache')))return 'not downloaded';
-    const c=await caches.open('transformers-cache'), ks=await c.keys(); let s=0;
-    for(const k of ks){const r=await c.match(k);const l=r&&r.headers.get('content-length');s+=l?+l:0}
-    return ks.length?(s?kb(s):'downloaded'):'not downloaded';
-  }catch{return 'unknown'}
-}
 async function openSettings(){
   $('settings').hidden=false; $('settings').scrollTop=0; history.pushState({settings:1},'');
   $('s-del-1').hidden=false; $('s-del-2').hidden=true;
   $('s-notes').textContent=notes.length;
   $('s-photos').textContent=kb(notes.reduce((s,n)=>s+n.size,0));
-  $('s-model').textContent='checking…'; $('s-model').textContent=await modelSize();
   try{ $('s-persist').textContent=(navigator.storage&&navigator.storage.persisted&&await navigator.storage.persisted())?'yes':'no' }catch{}
 }
 $('open-settings').onclick=openSettings;
@@ -762,7 +737,6 @@ $('s-del').onclick=()=>{
 $('s-del-no').onclick=()=>{ $('s-del-1').hidden=false; $('s-del-2').hidden=true };
 
 async function wipeEverything(){
-  try{ worker&&worker.terminate() }catch{}
   try{ (await dbp).close() }catch{}
   const dbNames=[DB];
   try{ if(indexedDB.databases) for(const d of await indexedDB.databases()) if(d.name&&!dbNames.includes(d.name)) dbNames.push(d.name) }catch{}
@@ -777,7 +751,7 @@ $('s-del-yes').onclick=async()=>{
   await wipeEverything();
   document.body.innerHTML=`<main class="gone">
     <h1>El Cuaderno is deleted</h1>
-    <p>All notes, photos, read text, the reading model and the offline files are gone from this phone.</p>
+    <p>All notes, photos, text and the offline files are gone from this phone.</p>
     <p><b>Last step:</b> remove the icon from your home screen. Press and hold the El Cuaderno icon, then choose <b>Remove App</b> (iPhone) or <b>Uninstall</b> / <b>Remove</b> (Android).</p>
     <p>Changed your mind? Open the app's web address again to start fresh.</p>
   </main>`;
